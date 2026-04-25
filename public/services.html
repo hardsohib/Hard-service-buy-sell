@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Services</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      transition: 0.4s ease;
+      overflow-x: hidden;
+      position: relative;
+      padding-bottom: 110px;
+    }
+
+    body.dark {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #fff;
+    }
+
+    body.light {
+      background: linear-gradient(135deg, #f5f7fa, #dfe9f3);
+      color: #111;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 760px;
+    }
+
+    .btn {
+      padding: 11px 16px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+      min-height: 44px;
+      white-space: nowrap;
+    }
+
+    body.dark .btn {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .btn {
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .deposit-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+      color: white !important;
+      border: none !important;
+    }
+
+    .logout-btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+      color: white !important;
+      border: none !important;
+    }
+
+    .balance-box {
+      padding: 11px 16px;
+      border-radius: 12px;
+      font-weight: bold;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 170px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    body.dark .balance-box {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #fff;
+    }
+
+    body.light .balance-box {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.08);
+      color: #111;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 10px 0;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 5vw, 40px);
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      opacity: 0.85;
+      font-size: clamp(14px, 2vw, 16px);
+      line-height: 1.6;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 0 8px;
+    }
+
+    .services {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      padding: 22px;
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      transition: 0.3s;
+      min-width: 0;
+    }
+
+    body.dark .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    body.light .card {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+    }
+
+    .icon {
+      font-size: 30px;
+      margin-bottom: 10px;
+    }
+
+    .profile-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    .profile-left:hover {
+      transform: translateY(-2px);
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      box-shadow: 0 6px 15px rgba(99,102,241,0.4);
+    }
+
+    .card h3 {
+      margin-bottom: 10px;
+      font-size: clamp(20px, 2.5vw, 24px);
+      line-height: 1.3;
+    }
+
+    .card p {
+      opacity: 0.85;
+      line-height: 1.6;
+      font-size: 14px;
+      min-height: 48px;
+      word-break: break-word;
+    }
+
+    .price {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 14px 0;
+      color: #22c55e;
+    }
+
+    .buy {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #3b82f6, #9333ea);
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+      min-height: 44px;
+    }
+
+    .buy:hover {
+      transform: translateY(-2px);
+    }
+
+    .contact-btn {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      z-index: 1000;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 18px;
+      border-radius: 14px;
+      font-weight: bold;
+      transition: 0.3s;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+      min-height: 46px;
+    }
+
+    .contact-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .theme-btn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 1000;
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+      min-height: 46px;
+    }
+
+    body.dark .theme-btn {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    body.light .theme-btn {
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+
+    .theme-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    @media (max-width: 992px) {
+      .services {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding-bottom: 120px;
+      }
+
+      .wrapper {
+        padding: 16px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .top-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: 100%;
+      }
+
+      .balance-box {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .btn {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .services {
+        grid-template-columns: 1fr;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .contact-btn,
+      .theme-btn {
+        bottom: 14px;
+        padding: 11px 14px;
+        font-size: 14px;
+        min-height: 42px;
+      }
+
+      .contact-btn {
+        left: 14px;
+      }
+
+      .theme-btn {
+        right: 14px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .top-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .balance-box {
+        grid-column: auto;
+      }
+
+      .contact-btn,
+      .theme-btn {
+        font-size: 13px;
+        padding: 10px 12px;
+      }
+    }
+  </style>
+</head>
+<body class="dark">
+
+  <div class="wrapper">
+    <div class="topbar">
+      <div class="profile-left" onclick="window.location.href='profile.html'">
+        <div class="avatar" id="profileAvatar">F</div>
+        <span>Profile</span>
+      </div>
+
+      <div class="top-actions">
+        <button class="btn" id="adminPanelBtn" style="display:none;" onclick="window.location.href='admin.html'">Admin Panel</button>
+        <div class="balance-box">Balance: <span id="balanceAmount">0</span> UZS</div>
+        <button class="btn deposit-btn" onclick="window.location.href='deposit.html'">Deposit</button>
+        <button class="btn logout-btn" onclick="logoutUser()">Logout</button>
+      </div>
+    </div>
+
+    <div class="hero">
+      <h1>Choose Your Service</h1>
+      <p>Fast, clean, and modern digital services for your needs</p>
+    </div>
+
+    <div class="services">
+      <div class="card">
+        <div class="icon">🌐</div>
+        <h3>Website</h3>
+        <p>Modern responsive website for business and personal use</p>
+        <div class="price">650,000 UZS</div>
+        <button class="buy" onclick="buyService(1)">Buy</button>
+      </div>
+
+      <div class="card">
+        <div class="icon">🤖</div>
+        <h3>Telegram Bot</h3>
+        <p>Telegram bot with frontend and useful logic</p>
+        <div class="price">520,000 UZS</div>
+        <button class="buy" onclick="buyService(2)">Buy</button>
+      </div>
+
+      <div class="card">
+        <div class="icon">📱</div>
+        <h3>Mini App</h3>
+        <p>Telegram mini app design with mobile-friendly interface</p>
+        <div class="price">430,000 UZS</div>
+        <button class="buy" onclick="buyService(3)">Buy</button>
+      </div>
+    </div>
+  </div>
+
+  <a class="contact-btn" href="https://t.me/Sohapro" target="_blank">Contact</a>
+  <button class="theme-btn" id="themeToggle">☀️ Theme</button>
+
+  <script>
+    const API_URL = "http://localhost:5000";
+    const themeToggle = document.getElementById("themeToggle");
+    const body = document.body;
+    const balanceAmount = document.getElementById("balanceAmount");
+    const adminPanelBtn = document.getElementById("adminPanelBtn");
+    const profileAvatar = document.getElementById("profileAvatar");
+
+    const token = localStorage.getItem("token");
+    const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+    if (!token) {
+      window.location.href = "index.html";
+    }
+
+    if (savedUser.role === "admin") {
+      adminPanelBtn.style.display = "inline-block";
+    }
+
+    async function loadUserProfile() {
+      try {
+        const response = await fetch(`${API_URL}/api/profile/me`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "index.html";
+          return;
+        }
+
+        balanceAmount.textContent = Number(data.balance || 0).toLocaleString("en-US");
+        localStorage.setItem("user", JSON.stringify(data));
+
+        if (data.name) {
+          profileAvatar.textContent = data.name.charAt(0).toUpperCase();
+        }
+
+        if (data.role === "admin") {
+          adminPanelBtn.style.display = "inline-block";
+        } else {
+          adminPanelBtn.style.display = "none";
+        }
+      } catch (error) {
+        console.error("Profile load error:", error);
+      }
+    }
+
+    async function buyService(serviceId) {
+    const ok = confirm("Are you sure you want to buy this service?");
+    if (!ok) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/services/buy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ serviceId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Failed to buy service.");
+        return;
+      }
+
+      await loadUserProfile();
+      window.location.href = data.redirect;
+    } catch (error) {
+      alert("Server error. Check backend route /api/services/buy");
+      console.error(error);
+    }
+  }
+
+    themeToggle.addEventListener("click", () => {
+      body.classList.toggle("dark");
+      body.classList.toggle("light");
+
+      if (body.classList.contains("dark")) {
+        themeToggle.textContent = "☀️ Theme";
+      } else {
+        themeToggle.textContent = "🌙 Theme";
+      }
+    });
+
+    function logoutUser() {
+      const confirmLogout = confirm("Are you sure you want to logout?");
+      if (confirmLogout) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+      }
+    }
+
+    loadUserProfile();
+  </script>
+
+</body>
+</html>

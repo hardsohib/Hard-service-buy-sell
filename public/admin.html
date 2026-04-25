@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: white;
+      padding: 20px;
+      transition: 0.3s;
+    }
+
+    body.light {
+      background: linear-gradient(135deg, #f5f7fa, #dfe9f3);
+      color: #111;
+    }
+
+    .wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .title {
+      font-size: 30px;
+      font-weight: bold;
+    }
+
+    .top-actions,
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn,
+    .small-btn {
+      border: none;
+      padding: 11px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    body:not(.light) .btn {
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .btn {
+      background: white;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .small-btn {
+      color: white;
+    }
+
+    .btn:hover,
+    .small-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .logout-btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+      color: white !important;
+    }
+
+    .section {
+      margin-bottom: 24px;
+      padding: 20px;
+      border-radius: 20px;
+      backdrop-filter: blur(14px);
+    }
+
+    body:not(.light) .section {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .section {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 14px;
+    }
+
+    .search-box {
+      margin-bottom: 16px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: none;
+      outline: none;
+      font-size: 15px;
+    }
+
+    body:not(.light) .search-input {
+      background: rgba(255,255,255,0.06);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .search-input {
+      background: white;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      padding: 16px;
+      border-radius: 16px;
+    }
+
+    body:not(.light) .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    body.light .card {
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .user-name {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .muted {
+      opacity: 0.8;
+      font-size: 14px;
+    }
+
+    .balance-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    .password-btn {
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+    }
+
+    .info-btn {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+
+    .approve-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    .decline-btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .status {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      white-space: nowrap;
+    }
+
+    .progress {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .completed {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    .declined {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .theme-btn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 1000;
+    }
+
+    .empty {
+      opacity: 0.8;
+      padding: 10px 0;
+    }
+
+    @media (max-width: 700px) {
+      body {
+        padding: 14px;
+      }
+
+      .title {
+        font-size: 24px;
+      }
+
+      .actions,
+      .top-actions {
+        width: 100%;
+      }
+
+      .small-btn,
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="topbar">
+      <div class="title">Admin Panel</div>
+      <div class="top-actions">
+        <button class="btn" onclick="window.location.href='services.html'">Back</button>
+        <button class="btn logout-btn" onclick="logoutUser()">Logout</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Users</div>
+
+      <div class="search-box">
+        <input
+          type="text"
+          id="searchInput"
+          class="search-input"
+          placeholder="Search by username or phone number"
+        />
+      </div>
+
+      <div class="list" id="usersList">
+        <div class="empty">Loading users...</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Deposits</div>
+      <div class="list" id="depositsList">
+        <div class="empty">Loading deposits...</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn theme-btn" id="themeToggle">☀️ Theme</button>
+
+  <script>
+    const API_URL = "http://localhost:5000";
+    const token = localStorage.getItem("token");
+    const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const usersList = document.getElementById("usersList");
+    const depositsList = document.getElementById("depositsList");
+    const themeToggle = document.getElementById("themeToggle");
+    const body = document.body;
+    const searchInput = document.getElementById("searchInput");
+
+    let allUsers = [];
+
+    if (!token) {
+      window.location.href = "index.html";
+    }
+
+    if (savedUser.role !== "admin") {
+      alert("Admin only.");
+      window.location.href = "services.html";
+    }
+
+    themeToggle.addEventListener("click", () => {
+      body.classList.toggle("light");
+      themeToggle.textContent = body.classList.contains("light") ? "🌙 Theme" : "☀️ Theme";
+    });
+
+    function logoutUser() {
+      const ok = confirm("Are you sure you want to logout?");
+      if (ok) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+      }
+    }
+
+    function getStatusClass(status) {
+      if (status === "completed") return "completed";
+      if (status === "declined") return "declined";
+      return "progress";
+    }
+
+    function getStatusText(status) {
+      if (status === "completed") return "Completed";
+      if (status === "declined") return "Declined";
+      return "In Progress";
+    }
+
+    function renderUsers(users) {
+      if (!users.length) {
+        usersList.innerHTML = `<div class="empty">No users found.</div>`;
+        return;
+      }
+
+      usersList.innerHTML = users.map(user => `
+        <div class="card">
+          <div class="row">
+            <div>
+              <div class="user-name">${user.name}</div>
+              <div class="muted">${user.phone}</div>
+            </div>
+            <div>
+              <div class="muted">Role: ${user.role}</div>
+              <div class="muted">Balance: ${Number(user.balance).toLocaleString("en-US")} UZS</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="muted">Gmail: ${user.gmail || "-"}</div>
+            <div class="muted">Telegram: ${user.telegram || "-"}</div>
+          </div>
+
+          <div class="actions">
+            <button class="small-btn balance-btn" onclick="changeBalance(${user.id}, ${user.balance})">Change Balance</button>
+            <button class="small-btn password-btn" onclick="changePassword(${user.id})">Reset Password</button>
+            <button class="small-btn info-btn" onclick="changeConnections(${user.id}, '${escapeValue(user.name)}', '${escapeValue(user.phone)}', '${escapeValue(user.gmail || "")}', '${escapeValue(user.telegram || "")}')">Change Gmail / Telegram</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function escapeValue(value) {
+      return String(value)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function loadUsers() {
+      try {
+        const response = await fetch(`${API_URL}/api/admin/users`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          usersList.innerHTML = `<div class="empty">${data.message || "Failed to load users"}</div>`;
+          return;
+        }
+
+        allUsers = data;
+        renderUsers(allUsers);
+      } catch (error) {
+        usersList.innerHTML = `<div class="empty">Server error.</div>`;
+      }
+    }
+
+    async function loadDeposits() {
+      try {
+        const response = await fetch(`${API_URL}/api/admin/deposits`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          depositsList.innerHTML = `<div class="empty">${data.message || "Failed to load deposits"}</div>`;
+          return;
+        }
+
+        if (!data.length) {
+          depositsList.innerHTML = `<div class="empty">No deposits found.</div>`;
+          return;
+        }
+
+        depositsList.innerHTML = data.map(item => `
+          <div class="card">
+            <div class="row">
+              <div>
+                <div class="user-name">${item.name}</div>
+                <div class="muted">${item.phone}</div>
+              </div>
+              <div>
+                <div class="muted">${Number(item.amount).toLocaleString("en-US")} UZS</div>
+                <div class="muted">${item.method}</div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="muted">${new Date(item.created_at).toLocaleString()}</div>
+              <div class="status ${getStatusClass(item.status)}">${getStatusText(item.status)}</div>
+            </div>
+
+            <div class="actions">
+              <button class="small-btn approve-btn" onclick="updateDepositStatus(${item.id}, 'completed')">Approve</button>
+              <button class="small-btn decline-btn" onclick="updateDepositStatus(${item.id}, 'declined')">Decline</button>
+            </div>
+          </div>
+        `).join("");
+      } catch (error) {
+        depositsList.innerHTML = `<div class="empty">Server error.</div>`;
+      }
+    }
+
+    async function changeBalance(userId, currentBalance) {
+      const value = prompt("Enter new balance:", currentBalance);
+      if (value === null) return;
+
+      const balance = Number(value);
+      if (isNaN(balance) || balance < 0) {
+        alert("Invalid balance.");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/admin/user/${userId}/balance`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ balance })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Failed to update balance.");
+          return;
+        }
+
+        alert("Balance updated.");
+        loadUsers();
+      } catch (error) {
+        alert("Server error.");
+      }
+    }
+
+    async function changePassword(userId) {
+      const password = prompt("Enter new password (minimum 8 characters):");
+      if (password === null) return;
+
+      if (password.length < 8) {
+        alert("Password must be at least 8 characters.");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/admin/user/${userId}/password`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Failed to update password.");
+          return;
+        }
+
+        alert("Password updated.");
+      } catch (error) {
+        alert("Server error.");
+      }
+    }
+
+    async function changeConnections(userId, currentName, currentPhone, currentGmail, currentTelegram) {
+      const gmail = prompt("Enter new Gmail:", currentGmail);
+      if (gmail === null) return;
+
+      const telegram = prompt("Enter new Telegram:", currentTelegram);
+      if (telegram === null) return;
+
+      if (gmail.trim() && !gmail.includes("@")) {
+        alert("Enter a valid Gmail.");
+        return;
+      }
+
+      if (telegram.trim() && !telegram.startsWith("@")) {
+        alert("Telegram username must start with @");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/admin/user/${userId}/info`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name: currentName,
+            phone: currentPhone,
+            gmail: gmail.trim(),
+            telegram: telegram.trim()
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Failed to update info.");
+          return;
+        }
+
+        alert("Gmail and Telegram updated.");
+        loadUsers();
+      } catch (error) {
+        alert("Server error.");
+      }
+    }
+
+    async function updateDepositStatus(depositId, status) {
+      try {
+        const response = await fetch(`${API_URL}/api/admin/deposit/${depositId}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Failed to update deposit.");
+          return;
+        }
+
+        alert(data.message || "Deposit updated.");
+        loadDeposits();
+        loadUsers();
+      } catch (error) {
+        alert("Server error.");
+      }
+    }
+
+    searchInput.addEventListener("input", () => {
+      const value = searchInput.value.trim().toLowerCase();
+
+      const filteredUsers = allUsers.filter(user => {
+        const name = (user.name || "").toLowerCase();
+        const phone = (user.phone || "").toLowerCase();
+        return name.includes(value) || phone.includes(value);
+      });
+
+      renderUsers(filteredUsers);
+    });
+
+    loadUsers();
+    loadDeposits();
+  </script>
+</body>
+</html>

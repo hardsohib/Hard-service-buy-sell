@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deposit</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      transition: 0.4s ease;
+      padding: 20px;
+    }
+
+    body.dark {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #fff;
+    }
+
+    body.light {
+      background: linear-gradient(135deg, #f5f7fa, #dfe9f3);
+      color: #111;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .left-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .page-title {
+      font-size: clamp(24px, 4vw, 32px);
+      font-weight: bold;
+    }
+
+    .btn {
+      border: none;
+      padding: 11px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+      min-height: 44px;
+    }
+
+    body.dark .btn {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .btn {
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .theme-btn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 1000;
+    }
+
+    .contact-btn {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      z-index: 1000;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white !important;
+      border: none !important;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+    }
+
+    .card {
+      padding: 22px;
+      border-radius: 22px;
+      margin-bottom: 22px;
+      backdrop-filter: blur(14px);
+    }
+
+    body.dark .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    body.light .card {
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 14px;
+    }
+
+    .section-text {
+      opacity: 0.85;
+      line-height: 1.6;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+
+    .deposit-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .deposit-option {
+      border-radius: 18px;
+      padding: 20px;
+      transition: 0.3s;
+      text-align: center;
+    }
+
+    body.dark .deposit-option {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    body.light .deposit-option {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .deposit-option:hover {
+      transform: translateY(-5px);
+    }
+
+    .deposit-icon {
+      font-size: 34px;
+      margin-bottom: 12px;
+    }
+
+    .deposit-option h3 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .deposit-option p {
+      font-size: 14px;
+      opacity: 0.85;
+      line-height: 1.6;
+      min-height: 65px;
+      margin-bottom: 14px;
+    }
+
+    .auto-label {
+      display: inline-block;
+      margin-bottom: 14px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+
+    .future-label {
+      display: inline-block;
+      margin-bottom: 14px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      color: white;
+    }
+
+    .select-btn {
+      width: 100%;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #3b82f6, #9333ea);
+      transition: 0.3s;
+      min-height: 44px;
+    }
+
+    .select-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      flex-wrap: wrap;
+    }
+
+    body.dark .history-item {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    body.light .history-item {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .history-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .history-title {
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    .history-date {
+      font-size: 13px;
+      opacity: 0.75;
+    }
+
+    .history-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .history-amount {
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    .status {
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      white-space: nowrap;
+    }
+
+    .status.progress {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .status.completed {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    .status.declined {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .note {
+      margin-top: 14px;
+      font-size: 13px;
+      opacity: 0.8;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 900px) {
+      .deposit-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 14px;
+        padding-bottom: 90px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .left-top,
+      .right-top {
+        width: 100%;
+      }
+
+      .right-top {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .history-item {
+        align-items: flex-start;
+      }
+
+      .history-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .contact-btn,
+      .theme-btn {
+        bottom: 14px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+
+      .contact-btn {
+        left: 14px;
+      }
+
+      .theme-btn {
+        right: 14px;
+      }
+    }
+  </style>
+</head>
+<body class="dark">
+
+  <div class="wrapper">
+    <div class="topbar">
+      <div class="left-top">
+        <button class="btn" onclick="window.location.href='services.html'">← Back</button>
+        <div class="page-title">Deposit</div>
+      </div>
+
+      <div class="right-top">
+        <button class="btn" onclick="window.location.href='profile.html'">Profile</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Deposit Options</div>
+      <div class="section-text">
+        Choose the most comfortable way to add money to your balance.
+      </div>
+
+      <div class="deposit-grid">
+        <div class="deposit-option">
+          <div class="deposit-icon">💳</div>
+          <h3>Payme</h3>
+          <p>Fast deposit through Payme. Auto payment system will be connected in the future.</p>
+          <div class="future-label">Auto - Future</div>
+          <button class="select-btn">Select Payme</button>
+        </div>
+
+        <div class="deposit-option">
+          <div class="deposit-icon">📲</div>
+          <h3>Click</h3>
+          <p>Deposit with Click. Auto payment system will also be added later.</p>
+          <div class="future-label">Auto - Future</div>
+          <button class="select-btn">Select Click</button>
+        </div>
+
+        <div class="deposit-option">
+          <div class="deposit-icon">👨‍💼</div>
+          <h3>Via Admin</h3>
+          <p>Contact admin directly and send deposit details manually for confirmation.</p>
+          <div class="auto-label">Available Now</div>
+          <button class="select-btn" onclick="window.open('https://t.me/Sohapro', '_blank')">Contact Admin</button>
+        </div>
+      </div>
+
+      <div class="note">
+        Payme and Click auto deposits will be added in the future. Right now, the active method is deposit via admin.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Deposit History</div>
+
+      <div class="history-list">
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-title">Deposit via Admin</div>
+            <div class="history-date">04 Apr 2026 • 14:20</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">50,000 UZS</div>
+            <div class="status progress">In Progress</div>
+          </div>
+        </div>
+
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-title">Deposit via Admin</div>
+            <div class="history-date">02 Apr 2026 • 18:05</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">100,000 UZS</div>
+            <div class="status completed">Completed</div>
+          </div>
+        </div>
+
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-title">Deposit via Admin</div>
+            <div class="history-date">30 Mar 2026 • 11:40</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">25,000 UZS</div>
+            <div class="status declined">Declined</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a class="btn contact-btn" href="https://t.me/Sohapro" target="_blank">Contact</a>
+  <button class="btn theme-btn" id="themeToggle">☀️ Theme</button>
+
+  <script>
+    const API_URL = "http://localhost:5000";
+  const themeToggle = document.getElementById("themeToggle");
+  const body = document.body;
+  const token = localStorage.getItem("token");
+  const historyList = document.querySelector(".history-list");
+
+  if (!token) {
+    window.location.href = "index.html";
+  }
+
+  themeToggle.addEventListener("click", () => {
+    body.classList.toggle("dark");
+    body.classList.toggle("light");
+
+    if (body.classList.contains("dark")) {
+      themeToggle.textContent = "☀️ Theme";
+    } else {
+      themeToggle.textContent = "🌙 Theme";
+    }
+  });
+
+  async function createDeposit(method) {
+    const amountText = prompt("Enter deposit amount in UZS:");
+
+    if (!amountText) return;
+
+    const amount = Number(amountText);
+
+    if (!amount || amount <= 0) {
+      alert("Enter a valid amount.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/deposit/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount,
+          method
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Failed to create deposit.");
+        return;
+      }
+
+      alert("Deposit request created successfully.");
+      loadDepositHistory();
+    } catch (error) {
+      alert("Server error.");
+    }
+  }
+
+  function getStatusClass(status) {
+    if (status === "completed") return "completed";
+    if (status === "declined") return "declined";
+    return "progress";
+  }
+
+  function getStatusText(status) {
+    if (status === "completed") return "Completed";
+    if (status === "declined") return "Declined";
+    return "In Progress";
+  }
+
+  async function loadDepositHistory() {
+    try {
+      const response = await fetch(`${API_URL}/api/deposit/history`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Failed to load deposit history.");
+        return;
+      }
+
+      if (!data.length) {
+        historyList.innerHTML = `
+          <div class="history-item">
+            <div class="history-left">
+              <div class="history-title">No deposits yet</div>
+              <div class="history-date">Your deposit history will appear here</div>
+            </div>
+            <div class="history-right">
+              <div class="history-amount">0 UZS</div>
+              <div class="status progress">In Progress</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      historyList.innerHTML = data.map(item => `
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-title">Deposit via ${item.method}</div>
+            <div class="history-date">${new Date(item.created_at).toLocaleString()}</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">${Number(item.amount).toLocaleString("en-US")} UZS</div>
+            <div class="status ${getStatusClass(item.status)}">${getStatusText(item.status)}</div>
+          </div>
+        </div>
+      `).join("");
+    } catch (error) {
+      alert("Server error.");
+    }
+  }
+
+  loadDepositHistory();
+  </script>
+
+</body>
+</html>
