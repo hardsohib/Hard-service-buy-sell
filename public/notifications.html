@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { min-height: 100vh; padding: 20px; background: linear-gradient(135deg,#0f172a,#1e293b); color: white; }
+    .wrapper { max-width: 900px; margin: auto; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+    .title { font-size: 28px; font-weight: bold; }
+    .btn { border:none; padding:11px 16px; border-radius:12px; cursor:pointer; font-weight:bold; background:rgba(255,255,255,.08); color:white; border:1px solid rgba(255,255,255,.08); }
+    .list { display:grid; gap:14px; }
+    .card { padding:18px; border-radius:18px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); }
+    .row { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+    .name { font-size:18px; font-weight:bold; }
+    .muted { opacity:.82; font-size:14px; line-height:1.5; }
+    .status { padding:6px 12px; border-radius:999px; font-size:12px; font-weight:bold; color:white; }
+    .pending { background:linear-gradient(135deg,#f59e0b,#d97706); }
+    .checking { background:linear-gradient(135deg,#3b82f6,#2563eb); }
+    .completed { background:linear-gradient(135deg,#22c55e,#16a34a); }
+    .cancelled { background:linear-gradient(135deg,#ef4444,#dc2626); }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="topbar">
+      <div class="title">Notifications</div>
+      <button class="btn" onclick="window.location.href='services.html'">Back</button>
+    </div>
+    <div class="list" id="notificationsList">
+      <div class="card">Loading notifications...</div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://hard-service-buy-sell.onrender.com";
+    const token = localStorage.getItem("token");
+    const list = document.getElementById("notificationsList");
+
+    if (!token) window.location.href = "index.html";
+
+    function statusClass(status) {
+      if (status === "completed") return "completed";
+      if (status === "checking") return "checking";
+      if (status === "cancelled" || status === "declined") return "cancelled";
+      return "pending";
+    }
+
+    function statusText(status) {
+      if (status === "completed") return "Completed";
+      if (status === "checking") return "Checking";
+      if (status === "cancelled" || status === "declined") return "Cancelled";
+      return "Pending";
+    }
+
+    async function loadNotifications() {
+      try {
+        const response = await fetch(`${API_URL}/api/services/my-orders`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          list.innerHTML = `<div class="card">${data.message || "Failed to load notifications."}</div>`;
+          return;
+        }
+
+        if (!data.length) {
+          list.innerHTML = `<div class="card">No notifications yet.</div>`;
+          return;
+        }
+
+        list.innerHTML = data.map(order => `
+          <div class="card">
+            <div class="row">
+              <div>
+                <div class="name">${order.service_name}</div>
+                <div class="muted">Bought: ${new Date(order.created_at).toLocaleString()}</div>
+              </div>
+              <div class="status ${statusClass(order.status)}">${statusText(order.status)}</div>
+            </div>
+            <div class="muted">${order.admin_message || "No admin message yet."}</div>
+          </div>
+        `).join("");
+      } catch (error) {
+        list.innerHTML = `<div class="card">Backend route needed: /api/services/my-orders</div>`;
+      }
+    }
+
+    loadNotifications();
+  </script>
+</body>
+</html>
