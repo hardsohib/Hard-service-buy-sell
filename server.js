@@ -134,7 +134,7 @@ async function init() {
   await addColumnIfMissing('purchases', 'service_name', "TEXT DEFAULT ''");
   await addColumnIfMissing('purchases', 'status', "TEXT NOT NULL DEFAULT 'pending'");
   await addColumnIfMissing('purchases', 'admin_message', "TEXT DEFAULT ''");
-  await addColumnIfMissing('purchases', 'updated_at', "TEXT DEFAULT CURRENT_TIMESTAMP");
+  await addColumnIfMissing('purchases', 'updated_at', "TEXT DEFAULT ''");
 
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
