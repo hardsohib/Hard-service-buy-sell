@@ -1,3 +1,113 @@
+Skip to content
+hardsohib
+Hard-service-buy-sell
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security and quality
+Insights
+Settings
+Files
+Go to file
+t
+T
+public
+README.md
+database.sqlite
+package-lock.json
+package.json
+server.js
+Hard-service-buy-sell
+/
+server.js
+in
+main
+
+Edit
+
+Preview
+Indent mode
+
+Spaces
+Indent size
+
+2
+Line wrap mode
+
+No wrap
+Editing server.js file contents
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+ 44
+ 45
+ 46
+ 47
+ 48
+ 49
+ 50
+ 51
+ 52
+ 53
+ 54
+ 55
+ 56
+ 57
+ 58
+ 59
+ 60
+ 61
+ 62
+ 63
+ 64
+ 65
+ 66
+ 67
+ 68
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -66,87 +176,4 @@ app.post('/api/services/buy',auth,async(req,res)=>{
     res.status(500).json({message:e.message});
   }
 });
-app.get('/api/services/my-orders',auth,async(req,res)=>{
-  try{
-    const rows=await all(
-      'SELECT id,service_id,service_name,price,status,admin_message,created_at,updated_at FROM purchases WHERE user_id=? ORDER BY id DESC',
-      [req.user.id]
-    );
-    res.json(rows);
-  }catch(e){
-    console.error('MY ORDERS ERROR:',e.message);
-    res.status(500).json({message:e.message});
-  }
-});
-
-app.get('/api/admin/orders',auth,adminOnly,async(req,res)=>{
-  try{
-    const rows=await all(
-      `SELECT p.id,p.service_id,p.service_name,p.price,p.status,p.admin_message,p.created_at,p.updated_at,
-              u.name,u.phone,u.gmail,u.telegram
-       FROM purchases p
-       JOIN users u ON u.id=p.user_id
-       ORDER BY p.id DESC`
-    );
-    res.json(rows);
-  }catch(e){
-    console.error('ADMIN ORDERS ERROR:',e.message);
-    res.status(500).json({message:e.message});
-  }
-});
-
-app.put('/api/admin/order/:id',auth,adminOnly,async(req,res)=>{
-  try{
-    const status=req.body.status || 'pending';
-    const admin_message=(req.body.admin_message || '').trim();
-
-    if(!['pending','in_progress','completed','declined'].includes(status)){
-      return res.status(400).json({message:'Invalid status.'});
-    }
-
-    await run(
-      'UPDATE purchases SET status=?, admin_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [status,admin_message,req.params.id]
-    );
-
-    res.json({message:'Order updated.'});
-  }catch(e){
-    console.error('UPDATE ORDER ERROR:',e.message);
-    res.status(500).json({message:e.message});
-  }
-});
-app.get("/api/services/my-orders", authenticateToken, (req, res) => {
-  db.all(
-    `SELECT 
-      id,
-      service_id,
-      service_name,
-      price,
-      status,
-      admin_message,
-      created_at,
-      updated_at
-    FROM service_orders 
-    WHERE user_id = ?
-    ORDER BY id DESC`,
-    [req.user.id],
-    (err, rows) => {
-      if (err) {
-        console.error("MY ORDERS ERROR:", err.message);
-        return res.status(500).json({ message: err.message });
-      }
-
-      res.json(rows);
-    }
-  );
-});
-app.get('/api/admin/orders',auth,adminOnly,async(req,res)=>{try{const rows=await all(`SELECT p.id,p.user_id,p.service_id,COALESCE(NULLIF(p.service_name,''),CASE p.service_id WHEN 1 THEN 'Certificate Speaking Real Test' WHEN 2 THEN 'Certificate Writing Real Test' ELSE 'Service' END) AS service_name,p.price,p.status,p.admin_message,p.created_at,p.updated_at,u.name,u.phone,u.gmail,u.telegram FROM purchases p JOIN users u ON u.id=p.user_id ORDER BY p.id DESC`);res.json(rows)}catch{res.status(500).json({message:'Server error.'})}});
-app.put('/api/admin/order/:id',auth,adminOnly,async(req,res)=>{try{const status=String(req.body.status||'pending');const admin_message=String(req.body.admin_message||'').trim();if(!['pending','checking','completed','cancelled','declined'].includes(status))return res.status(400).json({message:'Invalid order status.'});const order=await get('SELECT id FROM purchases WHERE id=?',[req.params.id]);if(!order)return res.status(404).json({message:'Order not found.'});await run('UPDATE purchases SET status=?,admin_message=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',[status,admin_message,req.params.id]);res.json({message:'Order updated and user can see it now.'})}catch{res.status(500).json({message:'Server error.'})}});
-app.get('/api/admin/users',auth,adminOnly,async(req,res)=>res.json(await all('SELECT id,name,phone,role,balance,gmail,telegram,created_at FROM users ORDER BY id DESC')));
-app.get('/api/admin/deposits',auth,adminOnly,async(req,res)=>res.json(await all('SELECT d.id,d.amount,d.method,d.status,d.created_at,u.name,u.phone FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC')));
-app.put('/api/admin/user/:id/balance',auth,adminOnly,async(req,res)=>{const b=Number(req.body.balance);if(isNaN(b)||b<0)return res.status(400).json({message:'Invalid balance.'});await run('UPDATE users SET balance=? WHERE id=?',[b,req.params.id]);res.json({message:'Balance updated.'})});
-app.put('/api/admin/user/:id/password',auth,adminOnly,async(req,res)=>{const{password}=req.body;if(!password||password.length<8)return res.status(400).json({message:'Password must be at least 8 characters.'});await run('UPDATE users SET password_hash=? WHERE id=?',[await bcrypt.hash(password,10),req.params.id]);res.json({message:'Password updated.'})});
-app.put('/api/admin/user/:id/info',auth,adminOnly,async(req,res)=>{const name=(req.body.name||'').trim(),phone=(req.body.phone||'').trim(),gmail=(req.body.gmail||'').trim(),telegram=(req.body.telegram||'').trim();if(!name||!phone)return res.status(400).json({message:'Name and phone are required.'});await run('UPDATE users SET name=?,phone=?,gmail=?,telegram=? WHERE id=?',[name,phone,gmail,telegram,req.params.id]);res.json({message:'User info updated.'})});
-app.put('/api/admin/deposit/:id/status',auth,adminOnly,async(req,res)=>{try{const status=req.body.status;if(!['completed','declined','progress'].includes(status))return res.status(400).json({message:'Invalid status.'});const d=await get('SELECT * FROM deposits WHERE id=?',[req.params.id]);if(!d)return res.status(404).json({message:'Deposit not found.'});if(d.status==='completed'&&status!=='completed')await run('UPDATE users SET balance=balance-? WHERE id=?',[d.amount,d.user_id]);if(d.status!=='completed'&&status==='completed')await run('UPDATE users SET balance=balance+? WHERE id=?',[d.amount,d.user_id]);await run('UPDATE deposits SET status=? WHERE id=?',[status,req.params.id]);res.json({message:'Deposit updated.'})}catch{res.status(500).json({message:'Server error.'})}});
-app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
-init().then(()=>app.listen(PORT,()=>console.log(`Server running: http://localhost:${PORT}`))).catch(e=>{console.error(e);process.exit(1)});
+Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
