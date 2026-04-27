@@ -22,7 +22,17 @@ const adminOnly=(req,res,next)=>req.user.role==='admin'?next():res.status(403).j
 async function init(){
 await run(`CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'user',balance INTEGER NOT NULL DEFAULT 0,gmail TEXT DEFAULT '',telegram TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
 await run(`CREATE TABLE IF NOT EXISTS deposits(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,amount INTEGER NOT NULL,method TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'progress',created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
-await run(`CREATE TABLE IF NOT EXISTS purchases(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,service_id INTEGER NOT NULL,service_name TEXT DEFAULT '',price INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending',admin_message TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
+await run(`CREATE TABLE IF NOT EXISTS purchases(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  service_id INTEGER NOT NULL,
+  service_name TEXT DEFAULT '',
+  price INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  admin_message TEXT DEFAULT '',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`);
 for (const q of [`ALTER TABLE purchases ADD COLUMN service_name TEXT DEFAULT ''`,`ALTER TABLE purchases ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`,`ALTER TABLE purchases ADD COLUMN admin_message TEXT DEFAULT ''`,`ALTER TABLE purchases ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP`]) { try { await run(q); } catch (e) {} }
 const p=process.env.ADMIN_PHONE||'+998901234567', pass=process.env.ADMIN_PASSWORD||'admin12345';
 if(!await get('SELECT id FROM users WHERE phone=?',[p])){await run('INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',['Admin',p,await bcrypt.hash(pass,10),'admin',1000000]);console.log(`Admin created: ${p} / ${pass}`)}
@@ -33,8 +43,78 @@ app.get('/api/profile/me',auth,(req,res)=>res.json(safe(req.user)));
 app.put('/api/profile/update',auth,async(req,res)=>{try{const name=(req.body.name||req.user.name).trim(),gmail=(req.body.gmail||'').trim(),telegram=(req.body.telegram||'').trim();if(name.length<2)return res.status(400).json({message:'Name must be at least 2 characters.'});if(gmail&&!gmail.includes('@'))return res.status(400).json({message:'Invalid Gmail.'});if(telegram&&!telegram.startsWith('@'))return res.status(400).json({message:'Telegram username must start with @.'});await run('UPDATE users SET name=?,gmail=?,telegram=? WHERE id=?',[name,gmail,telegram,req.user.id]);res.json(safe(await get('SELECT * FROM users WHERE id=?',[req.user.id])))}catch{res.status(500).json({message:'Server error.'})}});
 app.post('/api/deposit/create',auth,async(req,res)=>{try{const amount=Number(req.body.amount),method=String(req.body.method||'Admin').trim();if(!amount||amount<=0)return res.status(400).json({message:'Invalid amount.'});const r=await run('INSERT INTO deposits(user_id,amount,method,status) VALUES(?,?,?,?)',[req.user.id,amount,method,'progress']);res.status(201).json({message:'Deposit request created.',id:r.lastID})}catch{res.status(500).json({message:'Server error.'})}});
 app.get('/api/deposit/history',auth,async(req,res)=>res.json(await all('SELECT id,amount,method,status,created_at FROM deposits WHERE user_id=? ORDER BY id DESC',[req.user.id])));
-const services={1:{name:'Certificate Speaking Real Test',price:10000,redirect:'services.html'},2:{name:'Certificate Writing Real Test',price:5000,redirect:'services.html'}};
-app.post('/api/services/buy',auth,async(req,res)=>{try{const sid=Number(req.body.serviceId),s=services[sid];if(!s)return res.status(400).json({message:'Invalid service.'});if(Number(req.user.balance)<s.price)return res.status(400).json({message:'Not enough balance.'});await run('UPDATE users SET balance=balance-? WHERE id=?',[s.price,req.user.id]);await run('INSERT INTO purchases(user_id,service_id,service_name,price,status,admin_message) VALUES(?,?,?,?,?,?)',[req.user.id,sid,s.name,s.price,'pending','Your order was received. Admin will check and send result soon.']);res.json({message:'Service bought successfully. Check My Service Box for status.',redirect:s.redirect})}catch{res.status(500).json({message:'Server error.'})}});
+const services={
+  1:{name:'Certificate Speaking Real Test',price:10000,redirect:'service1.html'},
+  2:{name:'Certificate Writing Real Test',price:5000,redirect:'service2.html'},
+  3:{name:'Service 3',price:50000,redirect:'service3.html'}
+};  
+app.post('/api/services/buy',auth,async(req,res)=>{
+  try{
+    const sid=Number(req.body.serviceId),s=services[sid];
+    if(!s)return res.status(400).json({message:'Invalid service.'});
+    if(Number(req.user.balance)<s.price)return res.status(400).json({message:'Not enough balance.'});
+
+    await run('UPDATE users SET balance=balance-? WHERE id=?',[s.price,req.user.id]);
+    await run(
+      'INSERT INTO purchases(user_id,service_id,service_name,price,status,admin_message) VALUES(?,?,?,?,?,?)',
+      [req.user.id,sid,s.name,s.price,'pending','Your service request was received. Please wait for admin result.']
+    );
+
+    res.json({message:'Service bought successfully.',redirect:s.redirect});
+  }catch(e){
+    console.error('BUY ERROR:',e.message);
+    res.status(500).json({message:e.message});
+  }
+});
+app.get('/api/services/my-orders',auth,async(req,res)=>{
+  try{
+    const rows=await all(
+      'SELECT id,service_id,service_name,price,status,admin_message,created_at,updated_at FROM purchases WHERE user_id=? ORDER BY id DESC',
+      [req.user.id]
+    );
+    res.json(rows);
+  }catch(e){
+    console.error('MY ORDERS ERROR:',e.message);
+    res.status(500).json({message:e.message});
+  }
+});
+
+app.get('/api/admin/orders',auth,adminOnly,async(req,res)=>{
+  try{
+    const rows=await all(
+      `SELECT p.id,p.service_id,p.service_name,p.price,p.status,p.admin_message,p.created_at,p.updated_at,
+              u.name,u.phone,u.gmail,u.telegram
+       FROM purchases p
+       JOIN users u ON u.id=p.user_id
+       ORDER BY p.id DESC`
+    );
+    res.json(rows);
+  }catch(e){
+    console.error('ADMIN ORDERS ERROR:',e.message);
+    res.status(500).json({message:e.message});
+  }
+});
+
+app.put('/api/admin/order/:id',auth,adminOnly,async(req,res)=>{
+  try{
+    const status=req.body.status || 'pending';
+    const admin_message=(req.body.admin_message || '').trim();
+
+    if(!['pending','in_progress','completed','declined'].includes(status)){
+      return res.status(400).json({message:'Invalid status.'});
+    }
+
+    await run(
+      'UPDATE purchases SET status=?, admin_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [status,admin_message,req.params.id]
+    );
+
+    res.json({message:'Order updated.'});
+  }catch(e){
+    console.error('UPDATE ORDER ERROR:',e.message);
+    res.status(500).json({message:e.message});
+  }
+});
 app.get("/api/services/my-orders", authenticateToken, (req, res) => {
   db.all(
     `SELECT 
