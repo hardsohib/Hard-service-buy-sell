@@ -35,7 +35,31 @@ app.post('/api/deposit/create',auth,async(req,res)=>{try{const amount=Number(req
 app.get('/api/deposit/history',auth,async(req,res)=>res.json(await all('SELECT id,amount,method,status,created_at FROM deposits WHERE user_id=? ORDER BY id DESC',[req.user.id])));
 const services={1:{name:'Certificate Speaking Real Test',price:10000,redirect:'services.html'},2:{name:'Certificate Writing Real Test',price:5000,redirect:'services.html'}};
 app.post('/api/services/buy',auth,async(req,res)=>{try{const sid=Number(req.body.serviceId),s=services[sid];if(!s)return res.status(400).json({message:'Invalid service.'});if(Number(req.user.balance)<s.price)return res.status(400).json({message:'Not enough balance.'});await run('UPDATE users SET balance=balance-? WHERE id=?',[s.price,req.user.id]);await run('INSERT INTO purchases(user_id,service_id,service_name,price,status,admin_message) VALUES(?,?,?,?,?,?)',[req.user.id,sid,s.name,s.price,'pending','Your order was received. Admin will check and send result soon.']);res.json({message:'Service bought successfully. Check My Service Box for status.',redirect:s.redirect})}catch{res.status(500).json({message:'Server error.'})}});
-app.get('/api/services/my-orders',auth,async(req,res)=>{try{const rows=await all(`SELECT id,service_id,COALESCE(NULLIF(service_name,''),CASE service_id WHEN 1 THEN 'Certificate Speaking Real Test' WHEN 2 THEN 'Certificate Writing Real Test' ELSE 'Service' END) AS service_name,price,status,admin_message,created_at,updated_at FROM purchases WHERE user_id=? ORDER BY id DESC`,[req.user.id]);res.json(rows)}catch{res.status(500).json({message:'Server error.'})}});
+app.get("/api/services/my-orders", authenticateToken, (req, res) => {
+  db.all(
+    `SELECT 
+      id,
+      service_id,
+      service_name,
+      price,
+      status,
+      admin_message,
+      created_at,
+      updated_at
+    FROM service_orders 
+    WHERE user_id = ?
+    ORDER BY id DESC`,
+    [req.user.id],
+    (err, rows) => {
+      if (err) {
+        console.error("MY ORDERS ERROR:", err.message);
+        return res.status(500).json({ message: err.message });
+      }
+
+      res.json(rows);
+    }
+  );
+});
 app.get('/api/admin/orders',auth,adminOnly,async(req,res)=>{try{const rows=await all(`SELECT p.id,p.user_id,p.service_id,COALESCE(NULLIF(p.service_name,''),CASE p.service_id WHEN 1 THEN 'Certificate Speaking Real Test' WHEN 2 THEN 'Certificate Writing Real Test' ELSE 'Service' END) AS service_name,p.price,p.status,p.admin_message,p.created_at,p.updated_at,u.name,u.phone,u.gmail,u.telegram FROM purchases p JOIN users u ON u.id=p.user_id ORDER BY p.id DESC`);res.json(rows)}catch{res.status(500).json({message:'Server error.'})}});
 app.put('/api/admin/order/:id',auth,adminOnly,async(req,res)=>{try{const status=String(req.body.status||'pending');const admin_message=String(req.body.admin_message||'').trim();if(!['pending','checking','completed','cancelled','declined'].includes(status))return res.status(400).json({message:'Invalid order status.'});const order=await get('SELECT id FROM purchases WHERE id=?',[req.params.id]);if(!order)return res.status(404).json({message:'Order not found.'});await run('UPDATE purchases SET status=?,admin_message=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',[status,admin_message,req.params.id]);res.json({message:'Order updated and user can see it now.'})}catch{res.status(500).json({message:'Server error.'})}});
 app.get('/api/admin/users',auth,adminOnly,async(req,res)=>res.json(await all('SELECT id,name,phone,role,balance,gmail,telegram,created_at FROM users ORDER BY id DESC')));
