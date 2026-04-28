@@ -16,7 +16,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const uploadsDir = path.join(__dirname, 'uploads', 'speaking-tests');
@@ -25,7 +24,8 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + '.webm');
+    const safeName = Date.now() + '-' + Math.round(Math.random() * 1e9) + '.webm';
+    cb(null, safeName);
   }
 });
 
@@ -37,25 +37,19 @@ const upload = multer({
 const db = new sqlite3.Database(path.join(__dirname, 'database.sqlite'));
 
 const run = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      err ? reject(err) : resolve(this);
-    });
-  });
+  new Promise((resolve, reject) => db.run(sql, params, function (err) {
+    err ? reject(err) : resolve(this);
+  }));
 
 const get = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      err ? reject(err) : resolve(row);
-    });
-  });
+  new Promise((resolve, reject) => db.get(sql, params, (err, row) => {
+    err ? reject(err) : resolve(row);
+  }));
 
 const all = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      err ? reject(err) : resolve(rows);
-    });
-  });
+  new Promise((resolve, reject) => db.all(sql, params, (err, rows) => {
+    err ? reject(err) : resolve(rows);
+  }));
 
 function safeUser(user) {
   return {
@@ -78,39 +72,29 @@ async function auth(req, res, next) {
     const header = req.headers.authorization || '';
     const userToken = header.startsWith('Bearer ') ? header.slice(7) : null;
 
-    if (!userToken) {
-      return res.status(401).json({ message: 'No token provided.' });
-    }
+    if (!userToken) return res.status(401).json({ message: 'No token provided.' });
 
     const decoded = jwt.verify(userToken, JWT_SECRET);
     const user = await get('SELECT * FROM users WHERE id=?', [decoded.id]);
 
-    if (!user) {
-      return res.status(401).json({ message: 'User not found.' });
-    }
+    if (!user) return res.status(401).json({ message: 'User not found.' });
 
     req.user = user;
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ message: 'Invalid token.' });
   }
 }
 
 function adminOnly(req, res, next) {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin only.' });
-  }
-
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' });
   next();
 }
 
 async function addColumnIfMissing(table, column, definition) {
   const columns = await all(`PRAGMA table_info(${table})`);
   const exists = columns.some(c => c.name === column);
-
-  if (!exists) {
-    await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
+  if (!exists) await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 async function init() {
@@ -186,10 +170,9 @@ async function init() {
 
   if (!admin) {
     await run(
-      'INSERT INTO users(name, phone, password_hash, role, balance) VALUES(?,?,?,?,?)',
+      'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
       ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
     );
-
     console.log(`Admin created: ${adminPhone} / ${adminPassword}`);
   }
 }
@@ -217,7 +200,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     await run(
-      'INSERT INTO users(name, phone, password_hash) VALUES(?,?,?)',
+      'INSERT INTO users(name,phone,password_hash) VALUES(?,?,?)',
       [name.trim(), phone, await bcrypt.hash(password, 10)]
     );
 
@@ -233,14 +216,11 @@ app.post('/api/auth/login', async (req, res) => {
     const { phone, password } = req.body;
     const user = await get('SELECT * FROM users WHERE phone=?', [phone]);
 
-    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ message: 'Wrong phone or password.' });
     }
 
-    res.json({
-      token: makeToken(user),
-      user: safeUser(user)
-    });
+    res.json({ token: makeToken(user), user: safeUser(user) });
   } catch (err) {
     console.error('LOGIN ERROR:', err.message);
     res.status(500).json({ message: err.message });
@@ -296,10 +276,7 @@ app.post('/api/deposit/create', auth, async (req, res) => {
       [req.user.id, amount, method, 'progress']
     );
 
-    res.status(201).json({
-      message: 'Deposit request created.',
-      id: result.lastID
-    });
+    res.status(201).json({ message: 'Deposit request created.', id: result.lastID });
   } catch (err) {
     console.error('DEPOSIT CREATE ERROR:', err.message);
     res.status(500).json({ message: err.message });
@@ -339,10 +316,7 @@ app.post('/api/services/buy', auth, async (req, res) => {
       return res.status(400).json({ message: 'Not enough balance.' });
     }
 
-    await run(
-      'UPDATE users SET balance = balance - ? WHERE id=?',
-      [service.price, req.user.id]
-    );
+    await run('UPDATE users SET balance = balance - ? WHERE id=?', [service.price, req.user.id]);
 
     await run(
       `INSERT INTO purchases(user_id, service_id, service_name, price, status, admin_message, is_read)
@@ -358,10 +332,7 @@ app.post('/api/services/buy', auth, async (req, res) => {
       ]
     );
 
-    res.json({
-      message: 'Service bought successfully.',
-      redirect: service.redirect
-    });
+    res.json({ message: 'Service bought successfully.', redirect: service.redirect });
   } catch (err) {
     console.error('BUY ERROR:', err.message);
     res.status(500).json({ message: err.message });
@@ -419,12 +390,13 @@ app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) =
       return res.status(400).json({ message: 'Audio file is required.' });
     }
 
+    const audioPath = file.path;
     const audioUrl = `/uploads/speaking-tests/${file.filename}`;
 
     const result = await run(
       `INSERT INTO speaking_tests(user_id, full_name, video_name, audio_path, audio_url, status, result_message)
        VALUES(?,?,?,?,?,?,?)`,
-      [req.user.id, fullName, videoName, file.path, audioUrl, 'pending', '']
+      [req.user.id, fullName, videoName, audioPath, audioUrl, 'pending', '']
     );
 
     res.status(201).json({
@@ -548,20 +520,9 @@ app.get('/api/admin/orders', auth, adminOnly, async (req, res) => {
   try {
     const rows = await all(
       `SELECT 
-        p.id,
-        p.user_id,
-        p.service_id,
-        p.service_name,
-        p.price,
-        p.status,
-        p.admin_message,
-        p.is_read,
-        p.created_at,
-        p.updated_at,
-        u.name,
-        u.phone,
-        u.gmail,
-        u.telegram
+        p.id, p.user_id, p.service_id, p.service_name, p.price, p.status,
+        p.admin_message, p.is_read, p.created_at, p.updated_at,
+        u.name, u.phone, u.gmail, u.telegram
        FROM purchases p
        JOIN users u ON u.id = p.user_id
        ORDER BY p.id DESC`
@@ -626,10 +587,7 @@ app.put('/api/admin/user/:id/balance', auth, adminOnly, async (req, res) => {
       return res.status(400).json({ message: 'Invalid balance.' });
     }
 
-    await run(
-      'UPDATE users SET balance=? WHERE id=?',
-      [balance, req.params.id]
-    );
+    await run('UPDATE users SET balance=? WHERE id=?', [balance, req.params.id]);
 
     res.json({ message: 'Balance updated.' });
   } catch (err) {
@@ -663,4 +621,62 @@ app.put('/api/admin/user/:id/info', auth, adminOnly, async (req, res) => {
     const name = (req.body.name || '').trim();
     const phone = (req.body.phone || '').trim();
     const gmail = (req.body.gmail || '').trim();
-    const telegram = (req.body.telegram || '').
+    const telegram = (req.body.telegram || '').trim();
+
+    if (!name || !phone) {
+      return res.status(400).json({ message: 'Name and phone are required.' });
+    }
+
+    await run(
+      'UPDATE users SET name=?, phone=?, gmail=?, telegram=? WHERE id=?',
+      [name, phone, gmail, telegram, req.params.id]
+    );
+
+    res.json({ message: 'User info updated.' });
+  } catch (err) {
+    console.error('USER INFO UPDATE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/deposit/:id/status', auth, adminOnly, async (req, res) => {
+  try {
+    const status = req.body.status;
+
+    if (!['completed', 'declined', 'progress'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const deposit = await get('SELECT * FROM deposits WHERE id=?', [req.params.id]);
+
+    if (!deposit) {
+      return res.status(404).json({ message: 'Deposit not found.' });
+    }
+
+    if (deposit.status === 'completed' && status !== 'completed') {
+      await run('UPDATE users SET balance = balance - ? WHERE id=?', [deposit.amount, deposit.user_id]);
+    }
+
+    if (deposit.status !== 'completed' && status === 'completed') {
+      await run('UPDATE users SET balance = balance + ? WHERE id=?', [deposit.amount, deposit.user_id]);
+    }
+
+    await run('UPDATE deposits SET status=? WHERE id=?', [status, req.params.id]);
+
+    res.json({ message: 'Deposit updated.' });
+  } catch (err) {
+    console.error('DEPOSIT STATUS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+init()
+  .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
+  .catch(err => {
+    console.error('INIT ERROR:', err);
+    process.exit(1);
+  });
