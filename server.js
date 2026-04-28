@@ -409,10 +409,11 @@ app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) =
     res.status(500).json({ message: err.message });
   }
 });
+
 app.get('/api/speaking-tests/my', auth, async (req, res) => {
   try {
     const rows = await all(
-      `SELECT id, full_name, video_name, status, result_message, created_at, updated_at
+      `SELECT id, full_name, video_name, audio_url, status, result_message, created_at, updated_at
        FROM speaking_tests
        WHERE user_id=?
        ORDER BY id DESC`,
@@ -425,6 +426,7 @@ app.get('/api/speaking-tests/my', auth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 app.get('/api/admin/speaking-tests', auth, adminOnly, async (req, res) => {
   try {
     const rows = await all(
@@ -454,30 +456,6 @@ app.get('/api/admin/speaking-tests', auth, adminOnly, async (req, res) => {
   }
 });
 
-const test = await get(
-  'SELECT * FROM speaking_tests WHERE id=?',
-  [req.params.id]
-);
-
-if (!test) return res.status(404).json({ message: 'Not found' });
-
-// 🔥 update speaking test
-await run(
-  'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-  [status, resultMessage, req.params.id]
-);
-
-// 🔥 ALSO update purchase (service box)
-await run(
-  `UPDATE purchases 
-   SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
-   WHERE user_id=? AND service_id=1
-   ORDER BY id DESC LIMIT 1`,
-  [status, resultMessage, test.user_id]
-);
-
-res.json({ message: 'Updated everywhere' });
-
 app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
   try {
     const status = req.body.status || 'pending';
@@ -502,7 +480,7 @@ app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
     );
 
     await run(
-      `UPDATE purchases 
+      `UPDATE purchases
        SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
        WHERE id = (
          SELECT id FROM purchases
@@ -516,6 +494,27 @@ app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
     res.json({ message: 'Speaking test and service box updated.' });
   } catch (err) {
     console.error('UPDATE SPEAKING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const test = await get('SELECT id, audio_path FROM speaking_tests WHERE id=?', [req.params.id]);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Speaking test not found.' });
+    }
+
+    await run('DELETE FROM speaking_tests WHERE id=?', [req.params.id]);
+
+    if (test.audio_path && fs.existsSync(test.audio_path)) {
+      fs.unlinkSync(test.audio_path);
+    }
+
+    res.json({ message: 'Speaking test deleted.' });
+  } catch (err) {
+    console.error('DELETE SPEAKING TEST ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
