@@ -409,7 +409,22 @@ app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) =
     res.status(500).json({ message: err.message });
   }
 });
+app.get('/api/speaking-tests/my', auth, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT id, full_name, video_name, status, result_message, created_at, updated_at
+       FROM speaking_tests
+       WHERE user_id=?
+       ORDER BY id DESC`,
+      [req.user.id]
+    );
 
+    res.json(rows);
+  } catch (err) {
+    console.error('MY SPEAKING TESTS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
 app.get('/api/admin/speaking-tests', auth, adminOnly, async (req, res) => {
   try {
     const rows = await all(
