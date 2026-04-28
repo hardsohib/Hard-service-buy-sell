@@ -6,6 +6,8 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sqlite3 = require('sqlite3').verbose();
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +16,23 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const uploadsDir = path.join(__dirname, 'uploads', 'speaking-tests');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const safeName = Date.now() + '-' + Math.round(Math.random() * 1E9) + '.webm';
+    cb(null, safeName);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
 
 const db = new sqlite3.Database(path.join(__dirname, 'database.sqlite'));
 
@@ -124,6 +143,26 @@ async function init() {
   await addColumnIfMissing('purchases', 'admin_message', "TEXT DEFAULT ''");
   await addColumnIfMissing('purchases', 'is_read', "INTEGER NOT NULL DEFAULT 0");
   await addColumnIfMissing('purchases', 'updated_at', "TEXT DEFAULT ''");
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS speaking_tests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      full_name TEXT NOT NULL,
+      video_name TEXT NOT NULL,
+      audio_path TEXT NOT NULL,
+      audio_url TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      result_message TEXT DEFAULT '',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT ''
+    )
+  `);
+
+  await addColumnIfMissing('speaking_tests', 'status', "TEXT NOT NULL DEFAULT 'pending'");
+  await addColumnIfMissing('speaking_tests', 'result_message', "TEXT DEFAULT ''");
+  await addColumnIfMissing('speaking_tests', 'updated_at', "TEXT DEFAULT ''");
+
 
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
@@ -274,6 +313,108 @@ app.put('/api/services/my-orders/read', auth, async (req, res) => {
     res.json({ message: 'Notifications marked as read.' });
   } catch (err) {
     console.error('READ ORDERS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) => {
+  try {
+    const fullName = (req.body.full_name || req.user.name || '').trim();
+    const videoName = (req.body.video_name || '').trim();
+    const file = req.file;
+
+    if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
+    if (!videoName) return res.status(400).json({ message: 'Video name is required.' });
+    if (!file) return res.status(400).json({ message: 'Audio file is required.' });
+
+    const audioPath = file.path;
+    const audioUrl = `/uploads/speaking-tests/${file.filename}`;
+
+    const result = await run(
+      `INSERT INTO speaking_tests(user_id, full_name, video_name, audio_path, audio_url, status, result_message)
+       VALUES(?,?,?,?,?,?,?)`,
+      [req.user.id, fullName, videoName, audioPath, audioUrl, 'pending', '']
+    );
+
+    res.status(201).json({
+      message: 'Speaking test uploaded.',
+      id: result.lastID,
+      audio_url: audioUrl
+    });
+  } catch (err) {
+    console.error('SPEAKING TEST UPLOAD ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/admin/speaking-tests', auth, adminOnly, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT
+        s.id,
+        s.user_id,
+        s.full_name,
+        s.video_name,
+        s.audio_url,
+        s.status,
+        s.result_message,
+        s.created_at,
+        s.updated_at,
+        u.name AS user_name,
+        u.phone,
+        u.gmail,
+        u.telegram
+       FROM speaking_tests s
+       JOIN users u ON u.id = s.user_id
+       ORDER BY s.id DESC`
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN SPEAKING TESTS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const status = req.body.status || 'pending';
+    const resultMessage = (req.body.result_message || '').trim();
+
+    if (!['pending', 'checking', 'completed', 'declined'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const test = await get('SELECT id FROM speaking_tests WHERE id=?', [req.params.id]);
+    if (!test) return res.status(404).json({ message: 'Speaking test not found.' });
+
+    await run(
+      'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [status, resultMessage, req.params.id]
+    );
+
+    res.json({ message: 'Speaking test updated.' });
+  } catch (err) {
+    console.error('UPDATE SPEAKING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const test = await get('SELECT id, audio_path FROM speaking_tests WHERE id=?', [req.params.id]);
+    if (!test) return res.status(404).json({ message: 'Speaking test not found.' });
+
+    await run('DELETE FROM speaking_tests WHERE id=?', [req.params.id]);
+
+    if (test.audio_path && fs.existsSync(test.audio_path)) {
+      fs.unlinkSync(test.audio_path);
+    }
+
+    res.json({ message: 'Speaking test deleted.' });
+  } catch (err) {
+    console.error('DELETE SPEAKING TEST ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
