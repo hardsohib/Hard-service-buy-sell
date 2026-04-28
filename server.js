@@ -478,23 +478,44 @@ await run(
 
 res.json({ message: 'Updated everywhere' });
 
-app.delete('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
+app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
   try {
-    const test = await get('SELECT id, audio_path FROM speaking_tests WHERE id=?', [req.params.id]);
+    const status = req.body.status || 'pending';
+    const resultMessage = (req.body.result_message || '').trim();
+
+    if (!['pending', 'checking', 'completed', 'declined'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const test = await get(
+      'SELECT * FROM speaking_tests WHERE id=?',
+      [req.params.id]
+    );
 
     if (!test) {
       return res.status(404).json({ message: 'Speaking test not found.' });
     }
 
-    await run('DELETE FROM speaking_tests WHERE id=?', [req.params.id]);
+    await run(
+      'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [status, resultMessage, req.params.id]
+    );
 
-    if (test.audio_path && fs.existsSync(test.audio_path)) {
-      fs.unlinkSync(test.audio_path);
-    }
+    await run(
+      `UPDATE purchases 
+       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
+       WHERE id = (
+         SELECT id FROM purchases
+         WHERE user_id=? AND service_id=1
+         ORDER BY id DESC
+         LIMIT 1
+       )`,
+      [status, resultMessage, test.user_id]
+    );
 
-    res.json({ message: 'Speaking test deleted.' });
+    res.json({ message: 'Speaking test and service box updated.' });
   } catch (err) {
-    console.error('DELETE SPEAKING TEST ERROR:', err.message);
+    console.error('UPDATE SPEAKING TEST ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
