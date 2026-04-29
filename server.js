@@ -221,6 +221,19 @@ async function init() {
   await addColumnIfMissing('writing_tests', 'result_message', "TEXT DEFAULT ''");
   await addColumnIfMissing('writing_tests', 'updated_at', "TEXT DEFAULT ''");
 
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      amount INTEGER NOT NULL,
+      used_by INTEGER DEFAULT NULL,
+      used_at TEXT DEFAULT NULL,
+      created_by INTEGER DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
 
@@ -750,6 +763,130 @@ app.delete('/api/admin/writing-test/:id', auth, adminOnly, async (req, res) => {
     res.json({ message: 'Writing test deleted.' });
   } catch (err) {
     console.error('DELETE WRITING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+app.post('/api/admin/promo-codes', auth, adminOnly, async (req, res) => {
+  try {
+    let code = String(req.body.code || '').trim().toUpperCase();
+    const amount = Number(req.body.amount);
+
+    if (!code) {
+      code = 'PROMO-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
+    if (!/^[A-Z0-9_-]{4,30}$/.test(code)) {
+      return res.status(400).json({ message: 'Promo code must be 4-30 characters: A-Z, 0-9, _ or - only.' });
+    }
+
+    if (!amount || amount < 5000) {
+      return res.status(400).json({ message: 'Promo amount must be at least 5000 UZS.' });
+    }
+
+    const exists = await get('SELECT id FROM promo_codes WHERE code=?', [code]);
+    if (exists) {
+      return res.status(409).json({ message: 'This promo code already exists.' });
+    }
+
+    const result = await run(
+      'INSERT INTO promo_codes(code, amount, created_by) VALUES(?,?,?)',
+      [code, amount, req.user.id]
+    );
+
+    res.status(201).json({
+      message: 'Promo code created.',
+      id: result.lastID,
+      code,
+      amount
+    });
+  } catch (err) {
+    console.error('CREATE PROMO ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/admin/promo-codes', auth, adminOnly, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT
+        p.id,
+        p.code,
+        p.amount,
+        p.used_by,
+        p.used_at,
+        p.created_at,
+        u.name AS used_by_name,
+        u.phone AS used_by_phone
+       FROM promo_codes p
+       LEFT JOIN users u ON u.id = p.used_by
+       ORDER BY p.id DESC`
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN PROMO LIST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/admin/promo-code/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const promo = await get('SELECT * FROM promo_codes WHERE id=?', [req.params.id]);
+    if (!promo) return res.status(404).json({ message: 'Promo code not found.' });
+
+    if (promo.used_by) {
+      return res.status(400).json({ message: 'Used promo code cannot be deleted.' });
+    }
+
+    await run('DELETE FROM promo_codes WHERE id=?', [req.params.id]);
+    res.json({ message: 'Promo code deleted.' });
+  } catch (err) {
+    console.error('DELETE PROMO ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/promo/redeem', auth, async (req, res) => {
+  try {
+    const code = String(req.body.code || '').trim().toUpperCase();
+
+    if (!code) {
+      return res.status(400).json({ message: 'Promo code is required.' });
+    }
+
+    const promo = await get('SELECT * FROM promo_codes WHERE code=?', [code]);
+
+    if (!promo) {
+      return res.status(404).json({ message: 'Invalid promo code.' });
+    }
+
+    if (promo.used_by) {
+      return res.status(400).json({ message: 'This promo code was already used.' });
+    }
+
+    await run(
+      'UPDATE promo_codes SET used_by=?, used_at=CURRENT_TIMESTAMP WHERE id=? AND used_by IS NULL',
+      [req.user.id, promo.id]
+    );
+
+    await run(
+      'UPDATE users SET balance = balance + ? WHERE id=?',
+      [promo.amount, req.user.id]
+    );
+
+    const updatedUser = await get('SELECT * FROM users WHERE id=?', [req.user.id]);
+
+    res.json({
+      message: `Promo applied. ${Number(promo.amount).toLocaleString('en-US')} UZS added to your balance.`,
+      amount: promo.amount,
+      balance: updatedUser.balance,
+      user: safeUser(updatedUser)
+    });
+  } catch (err) {
+    console.error('REDEEM PROMO ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
