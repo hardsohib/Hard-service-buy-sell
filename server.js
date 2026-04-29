@@ -18,17 +18,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// UPLOADS
-const uploadsRoot = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, 'uploads', 'speaking-tests');
+const writingUploadsDir = path.join(__dirname, 'uploads', 'writing-tests');
 
-const speakingUploadsDir = path.join(uploadsRoot, 'speaking-tests');
-fs.mkdirSync(speakingUploadsDir, { recursive: true });
-
-const writingUploadsDir = path.join(uploadsRoot, 'writing-tests');
+fs.mkdirSync(uploadsDir, { recursive: true });
 fs.mkdirSync(writingUploadsDir, { recursive: true });
 
-const speakingStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, speakingUploadsDir),
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
     const safeName = Date.now() + '-' + Math.round(Math.random() * 1e9) + '.webm';
     cb(null, safeName);
@@ -36,7 +33,7 @@ const speakingStorage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage: speakingStorage,
+  storage,
   limits: { fileSize: 50 * 1024 * 1024 }
 });
 
@@ -44,7 +41,8 @@ const writingStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, writingUploadsDir),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || '') || '.jpg';
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
+    const safeName = Date.now() + '-' + Math.round(Math.random() * 1e9) + ext;
+    cb(null, safeName);
   }
 });
 
@@ -53,7 +51,19 @@ const writingUpload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }
 });
 
-// DATABASE
+const writingUploadFields = writingUpload.fields([
+  { name: 'formal_letter_question_file', maxCount: 1 },
+  { name: 'formal_letter_answer_files', maxCount: 5 },
+  { name: 'informal_letter_question_file', maxCount: 1 },
+  { name: 'informal_letter_answer_files', maxCount: 5 },
+  { name: 'essay_question_file', maxCount: 1 },
+  { name: 'essay_answer_files', maxCount: 5 }
+]);
+
+function uploadedUrls(files, field) {
+  return JSON.stringify((files[field] || []).map(file => `/uploads/writing-tests/${file.filename}`));
+}
+
 const db = new sqlite3.Database(path.join(__dirname, 'database.sqlite'));
 
 const run = (sql, params = []) =>
@@ -188,28 +198,28 @@ async function init() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       full_name TEXT NOT NULL,
-
       formal_letter_question_text TEXT DEFAULT '',
       formal_letter_question_files TEXT DEFAULT '[]',
       formal_letter_answer_text TEXT DEFAULT '',
       formal_letter_answer_files TEXT DEFAULT '[]',
-
       informal_letter_question_text TEXT DEFAULT '',
       informal_letter_question_files TEXT DEFAULT '[]',
       informal_letter_answer_text TEXT DEFAULT '',
       informal_letter_answer_files TEXT DEFAULT '[]',
-
       essay_question_text TEXT DEFAULT '',
       essay_question_files TEXT DEFAULT '[]',
       essay_answer_text TEXT DEFAULT '',
       essay_answer_files TEXT DEFAULT '[]',
-
       status TEXT NOT NULL DEFAULT 'pending',
       result_message TEXT DEFAULT '',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT ''
     )
   `);
+
+  await addColumnIfMissing('writing_tests', 'status', "TEXT NOT NULL DEFAULT 'pending'");
+  await addColumnIfMissing('writing_tests', 'result_message', "TEXT DEFAULT ''");
+  await addColumnIfMissing('writing_tests', 'updated_at', "TEXT DEFAULT ''");
 
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
@@ -225,7 +235,6 @@ async function init() {
   }
 }
 
-// AUTH ROUTES
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, phone, password } = req.body;
@@ -276,7 +285,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// PROFILE
 app.get('/api/profile/me', auth, (req, res) => {
   res.json(safeUser(req.user));
 });
@@ -312,7 +320,6 @@ app.put('/api/profile/update', auth, async (req, res) => {
   }
 });
 
-// DEPOSIT
 app.post('/api/deposit/create', auth, async (req, res) => {
   try {
     const amount = Number(req.body.amount);
@@ -348,7 +355,6 @@ app.get('/api/deposit/history', auth, async (req, res) => {
   }
 });
 
-// SERVICES
 const services = {
   1: { name: 'Certificate Speaking Real Test', price: 10000, redirect: 'service1.html' },
   2: { name: 'Certificate Writing Real Test', price: 5000, redirect: 'service2.html' },
@@ -389,7 +395,8 @@ app.post('/api/services/buy', auth, async (req, res) => {
     console.error('BUY ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
-});// ================= ORDERS =================
+});
+
 app.get('/api/services/my-orders', auth, async (req, res) => {
   try {
     const rows = await all(
@@ -423,16 +430,23 @@ app.put('/api/services/my-orders/read', auth, async (req, res) => {
   }
 });
 
-// ================= SPEAKING =================
 app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) => {
   try {
     const fullName = (req.body.full_name || req.user.name || '').trim();
     const videoName = (req.body.video_name || '').trim();
     const file = req.file;
 
-    if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
-    if (!videoName) return res.status(400).json({ message: 'Video link is required.' });
-    if (!file) return res.status(400).json({ message: 'Audio file is required.' });
+    if (!fullName) {
+      return res.status(400).json({ message: 'Full name is required.' });
+    }
+
+    if (!videoName) {
+      return res.status(400).json({ message: 'Video link is required.' });
+    }
+
+    if (!file) {
+      return res.status(400).json({ message: 'Audio file is required.' });
+    }
 
     const audioPath = file.path;
     const audioUrl = `/uploads/speaking-tests/${file.filename}`;
@@ -449,7 +463,7 @@ app.post('/api/speaking-tests', auth, upload.single('audio'), async (req, res) =
       audio_url: audioUrl
     });
   } catch (err) {
-    console.error('SPEAKING TEST ERROR:', err.message);
+    console.error('SPEAKING TEST UPLOAD ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
@@ -474,7 +488,20 @@ app.get('/api/speaking-tests/my', auth, async (req, res) => {
 app.get('/api/admin/speaking-tests', auth, adminOnly, async (req, res) => {
   try {
     const rows = await all(
-      `SELECT s.*, u.name AS user_name, u.phone, u.gmail, u.telegram
+      `SELECT
+        s.id,
+        s.user_id,
+        s.full_name,
+        s.video_name,
+        s.audio_url,
+        s.status,
+        s.result_message,
+        s.created_at,
+        s.updated_at,
+        u.name AS user_name,
+        u.phone,
+        u.gmail,
+        u.telegram
        FROM speaking_tests s
        JOIN users u ON u.id = s.user_id
        ORDER BY s.id DESC`
@@ -492,8 +519,18 @@ app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
     const status = req.body.status || 'pending';
     const resultMessage = (req.body.result_message || '').trim();
 
-    const test = await get('SELECT * FROM speaking_tests WHERE id=?', [req.params.id]);
-    if (!test) return res.status(404).json({ message: 'Speaking test not found.' });
+    if (!['pending', 'checking', 'completed', 'declined'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const test = await get(
+      'SELECT * FROM speaking_tests WHERE id=?',
+      [req.params.id]
+    );
+
+    if (!test) {
+      return res.status(404).json({ message: 'Speaking test not found.' });
+    }
 
     await run(
       'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
@@ -506,119 +543,405 @@ app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
        WHERE id = (
          SELECT id FROM purchases
          WHERE user_id=? AND service_id=1
-         ORDER BY id DESC LIMIT 1
+         ORDER BY id DESC
+         LIMIT 1
        )`,
       [status, resultMessage, test.user_id]
     );
 
-    res.json({ message: 'Speaking updated.' });
+    res.json({ message: 'Speaking test and service box updated.' });
   } catch (err) {
+    console.error('UPDATE SPEAKING TEST ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
 
-// ================= WRITING =================
-const writingUploadFields = writingUpload.fields([
-  { name: 'formal_letter_question_file', maxCount: 1 },
-  { name: 'formal_letter_answer_files', maxCount: 5 },
-  { name: 'informal_letter_question_file', maxCount: 1 },
-  { name: 'informal_letter_answer_files', maxCount: 5 },
-  { name: 'essay_question_file', maxCount: 1 },
-  { name: 'essay_answer_files', maxCount: 5 }
-]);
+app.delete('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const test = await get('SELECT id, audio_path FROM speaking_tests WHERE id=?', [req.params.id]);
 
-function uploadedUrls(files, field) {
-  return JSON.stringify((files[field] || []).map(file => `/uploads/writing-tests/${file.filename}`));
-}
+    if (!test) {
+      return res.status(404).json({ message: 'Speaking test not found.' });
+    }
+
+    await run('DELETE FROM speaking_tests WHERE id=?', [req.params.id]);
+
+    if (test.audio_path && fs.existsSync(test.audio_path)) {
+      fs.unlinkSync(test.audio_path);
+    }
+
+    res.json({ message: 'Speaking test deleted.' });
+  } catch (err) {
+    console.error('DELETE SPEAKING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 app.post('/api/writing-tests', auth, writingUploadFields, async (req, res) => {
   try {
     const files = req.files || {};
+    const fullName = (req.user.name || 'User').trim();
+
+    const hasAnyText =
+      (req.body.formal_letter_question_text || '').trim() ||
+      (req.body.formal_letter_answer_text || '').trim() ||
+      (req.body.informal_letter_question_text || '').trim() ||
+      (req.body.informal_letter_answer_text || '').trim() ||
+      (req.body.essay_question_text || '').trim() ||
+      (req.body.essay_answer_text || '').trim();
+
+    const hasAnyFile = Object.values(files).some(arr => Array.isArray(arr) && arr.length > 0);
+
+    if (!hasAnyText && !hasAnyFile) {
+      return res.status(400).json({ message: 'Please write or upload at least one section.' });
+    }
 
     const result = await run(
       `INSERT INTO writing_tests(
         user_id, full_name,
-        formal_letter_question_text, formal_letter_question_files,
-        formal_letter_answer_text, formal_letter_answer_files,
-        informal_letter_question_text, informal_letter_question_files,
-        informal_letter_answer_text, informal_letter_answer_files,
-        essay_question_text, essay_question_files,
-        essay_answer_text, essay_answer_files,
+        formal_letter_question_text, formal_letter_question_files, formal_letter_answer_text, formal_letter_answer_files,
+        informal_letter_question_text, informal_letter_question_files, informal_letter_answer_text, informal_letter_answer_files,
+        essay_question_text, essay_question_files, essay_answer_text, essay_answer_files,
         status, result_message
       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         req.user.id,
-        req.user.name || 'User',
-
+        fullName,
         req.body.formal_letter_question_text || '',
         uploadedUrls(files, 'formal_letter_question_file'),
         req.body.formal_letter_answer_text || '',
         uploadedUrls(files, 'formal_letter_answer_files'),
-
         req.body.informal_letter_question_text || '',
         uploadedUrls(files, 'informal_letter_question_file'),
         req.body.informal_letter_answer_text || '',
         uploadedUrls(files, 'informal_letter_answer_files'),
-
         req.body.essay_question_text || '',
         uploadedUrls(files, 'essay_question_file'),
         req.body.essay_answer_text || '',
         uploadedUrls(files, 'essay_answer_files'),
-
         'pending',
         ''
       ]
     );
 
-    res.status(201).json({ message: 'Writing test submitted.', id: result.lastID });
+    res.status(201).json({
+      message: 'Writing test submitted.',
+      id: result.lastID
+    });
   } catch (err) {
+    console.error('WRITING TEST UPLOAD ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/writing-tests/my', auth, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT id, full_name, status, result_message, created_at, updated_at
+       FROM writing_tests
+       WHERE user_id=?
+       ORDER BY id DESC`,
+      [req.user.id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('MY WRITING TESTS ERROR:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
 
 app.get('/api/admin/writing-tests', auth, adminOnly, async (req, res) => {
-  const rows = await all(
-    `SELECT w.*, u.name AS user_name, u.phone, u.gmail, u.telegram
-     FROM writing_tests w
-     JOIN users u ON u.id = w.user_id
-     ORDER BY w.id DESC`
-  );
+  try {
+    const rows = await all(
+      `SELECT
+        w.*,
+        u.name AS user_name,
+        u.phone,
+        u.gmail,
+        u.telegram
+       FROM writing_tests w
+       JOIN users u ON u.id = w.user_id
+       ORDER BY w.id DESC`
+    );
 
-  res.json(rows);
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN WRITING TESTS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
 });
 
 app.put('/api/admin/writing-test/:id', auth, adminOnly, async (req, res) => {
-  const status = req.body.status || 'pending';
-  const resultMessage = (req.body.result_message || '').trim();
+  try {
+    const status = req.body.status || 'pending';
+    const resultMessage = (req.body.result_message || '').trim();
 
-  const test = await get('SELECT * FROM writing_tests WHERE id=?', [req.params.id]);
-  if (!test) return res.status(404).json({ message: 'Writing test not found.' });
+    if (!['pending', 'checking', 'completed', 'declined'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
 
-  await run(
-    'UPDATE writing_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-    [status, resultMessage, req.params.id]
-  );
+    const test = await get('SELECT * FROM writing_tests WHERE id=?', [req.params.id]);
 
-  await run(
-    `UPDATE purchases
-     SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
-     WHERE id = (
-       SELECT id FROM purchases
-       WHERE user_id=? AND service_id=2
-       ORDER BY id DESC LIMIT 1
-     )`,
-    [status, resultMessage, test.user_id]
-  );
+    if (!test) {
+      return res.status(404).json({ message: 'Writing test not found.' });
+    }
 
-  res.json({ message: 'Writing updated.' });
+    await run(
+      'UPDATE writing_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [status, resultMessage, req.params.id]
+    );
+
+    await run(
+      `UPDATE purchases
+       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
+       WHERE id = (
+         SELECT id FROM purchases
+         WHERE user_id=? AND service_id=2
+         ORDER BY id DESC
+         LIMIT 1
+       )`,
+      [status, resultMessage, test.user_id]
+    );
+
+    res.json({ message: 'Writing test and service box updated.' });
+  } catch (err) {
+    console.error('UPDATE WRITING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
 });
 
-// ================= FALLBACK =================
+app.delete('/api/admin/writing-test/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const test = await get('SELECT * FROM writing_tests WHERE id=?', [req.params.id]);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Writing test not found.' });
+    }
+
+    const fields = [
+      'formal_letter_question_files',
+      'formal_letter_answer_files',
+      'informal_letter_question_files',
+      'informal_letter_answer_files',
+      'essay_question_files',
+      'essay_answer_files'
+    ];
+
+    for (const field of fields) {
+      let urls = [];
+      try {
+        urls = JSON.parse(test[field] || '[]');
+      } catch {
+        urls = [];
+      }
+
+      for (const url of urls) {
+        const filePath = path.join(__dirname, url.replace(/^\/+/, ''));
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+
+    await run('DELETE FROM writing_tests WHERE id=?', [req.params.id]);
+
+    res.json({ message: 'Writing test deleted.' });
+  } catch (err) {
+    console.error('DELETE WRITING TEST ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
+  try {
+    const rows = await all(
+      'SELECT id, name, phone, role, balance, gmail, telegram, created_at FROM users ORDER BY id DESC'
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN USERS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/admin/deposits', auth, adminOnly, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT d.id, d.amount, d.method, d.status, d.created_at, u.name, u.phone
+       FROM deposits d
+       JOIN users u ON u.id = d.user_id
+       ORDER BY d.id DESC`
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN DEPOSITS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/admin/orders', auth, adminOnly, async (req, res) => {
+  try {
+    const rows = await all(
+      `SELECT 
+        p.id, p.user_id, p.service_id, p.service_name, p.price, p.status,
+        p.admin_message, p.is_read, p.created_at, p.updated_at,
+        u.name, u.phone, u.gmail, u.telegram
+       FROM purchases p
+       JOIN users u ON u.id = p.user_id
+       ORDER BY p.id DESC`
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('ADMIN ORDERS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/order/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const status = req.body.status || 'pending';
+    const adminMessage = (req.body.admin_message || req.body.message || '').trim();
+
+    if (!['pending', 'checking', 'in_progress', 'completed', 'cancelled', 'declined'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const order = await get('SELECT id FROM purchases WHERE id=?', [req.params.id]);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+
+    await run(
+      'UPDATE purchases SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [status, adminMessage, req.params.id]
+    );
+
+    res.json({ message: 'Order updated.' });
+  } catch (err) {
+    console.error('UPDATE ORDER ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/admin/order/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const order = await get('SELECT id FROM purchases WHERE id=?', [req.params.id]);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+
+    await run('DELETE FROM purchases WHERE id=?', [req.params.id]);
+
+    res.json({ message: 'Order deleted.' });
+  } catch (err) {
+    console.error('DELETE ORDER ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/user/:id/balance', auth, adminOnly, async (req, res) => {
+  try {
+    const balance = Number(req.body.balance);
+
+    if (isNaN(balance) || balance < 0) {
+      return res.status(400).json({ message: 'Invalid balance.' });
+    }
+
+    await run('UPDATE users SET balance=? WHERE id=?', [balance, req.params.id]);
+
+    res.json({ message: 'Balance updated.' });
+  } catch (err) {
+    console.error('BALANCE UPDATE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/user/:id/password', auth, adminOnly, async (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password || password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+    }
+
+    await run(
+      'UPDATE users SET password_hash=? WHERE id=?',
+      [await bcrypt.hash(password, 10), req.params.id]
+    );
+
+    res.json({ message: 'Password updated.' });
+  } catch (err) {
+    console.error('PASSWORD UPDATE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/user/:id/info', auth, adminOnly, async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    const phone = (req.body.phone || '').trim();
+    const gmail = (req.body.gmail || '').trim();
+    const telegram = (req.body.telegram || '').trim();
+
+    if (!name || !phone) {
+      return res.status(400).json({ message: 'Name and phone are required.' });
+    }
+
+    await run(
+      'UPDATE users SET name=?, phone=?, gmail=?, telegram=? WHERE id=?',
+      [name, phone, gmail, telegram, req.params.id]
+    );
+
+    res.json({ message: 'User info updated.' });
+  } catch (err) {
+    console.error('USER INFO UPDATE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/admin/deposit/:id/status', auth, adminOnly, async (req, res) => {
+  try {
+    const status = req.body.status;
+
+    if (!['completed', 'declined', 'progress'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status.' });
+    }
+
+    const deposit = await get('SELECT * FROM deposits WHERE id=?', [req.params.id]);
+
+    if (!deposit) {
+      return res.status(404).json({ message: 'Deposit not found.' });
+    }
+
+    if (deposit.status === 'completed' && status !== 'completed') {
+      await run('UPDATE users SET balance = balance - ? WHERE id=?', [deposit.amount, deposit.user_id]);
+    }
+
+    if (deposit.status !== 'completed' && status === 'completed') {
+      await run('UPDATE users SET balance = balance + ? WHERE id=?', [deposit.amount, deposit.user_id]);
+    }
+
+    await run('UPDATE deposits SET status=? WHERE id=?', [status, req.params.id]);
+
+    res.json({ message: 'Deposit updated.' });
+  } catch (err) {
+    console.error('DEPOSIT STATUS ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ================= START =================
 init()
   .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
   .catch(err => {
