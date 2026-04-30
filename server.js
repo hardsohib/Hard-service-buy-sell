@@ -283,16 +283,7 @@ await run(
 );
 
 console.log('Admin reset:', adminPhone);
-  const admin = await get('SELECT id FROM users WHERE phone=?', [adminPhone]);
-
-  if (!admin) {
-    await run(
-      'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
-      ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
-    );
-    console.log(`Admin created: ${adminPhone} / ${adminPassword}`);
-  }
-}
+ 
 
 app.post('/api/auth/register', async (req, res) => {
   try {
