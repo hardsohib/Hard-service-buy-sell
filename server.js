@@ -272,7 +272,10 @@ async function init() {
 
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
-
+await run(
+  'UPDATE users SET password_hash=? WHERE phone=?',
+  [await bcrypt.hash(adminPassword, 10), adminPhone]
+);
   const admin = await get('SELECT id FROM users WHERE phone=?', [adminPhone]);
 
   if (!admin) {
