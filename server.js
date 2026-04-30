@@ -123,7 +123,7 @@ function safeUser(user) {
 }
 
 function makeToken(user) {
-  return jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '365d' });
 }
 
 async function auth(req, res, next) {
@@ -985,10 +985,22 @@ app.put('/api/admin/order/:id', auth, adminOnly, async (req, res) => {
       return res.status(400).json({ message: 'Invalid status.' });
     }
 
-    const order = await get('SELECT id FROM purchases WHERE id=?', [req.params.id]);
+    const order = await get('SELECT * FROM purchases WHERE id=?', [req.params.id]);
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found.' });
+    }
+
+    const shouldRefund =
+      order.status !== 'cancelled' &&
+      order.status !== 'declined' &&
+      (status === 'cancelled' || status === 'declined');
+
+    if (shouldRefund) {
+      await run(
+        'UPDATE users SET balance = balance + ? WHERE id=?',
+        [order.price, order.user_id]
+      );
     }
 
     await run(
@@ -996,7 +1008,11 @@ app.put('/api/admin/order/:id', auth, adminOnly, async (req, res) => {
       [status, adminMessage, req.params.id]
     );
 
-    res.json({ message: 'Order updated.' });
+    res.json({
+      message: shouldRefund ? 'Order updated and money refunded.' : 'Order updated.',
+      refunded: shouldRefund,
+      refund_amount: shouldRefund ? order.price : 0
+    });
   } catch (err) {
     console.error('UPDATE ORDER ERROR:', err.message);
     res.status(500).json({ message: err.message });
