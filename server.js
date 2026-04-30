@@ -270,24 +270,25 @@ async function init() {
     )
   `);
 
- const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
-const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
+  const adminPhone = (process.env.ADMIN_PHONE || '+998949903424').trim();
+  const adminPassword = (process.env.ADMIN_PASSWORD || 'Soha1212').trim();
 
-const existingAdmin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
+  const existingAdmin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
 
-if (!existingAdmin) {
-  await run(
-    'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
-    ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
-  );
-  console.log('Admin CREATED:', adminPhone);
-} else {
-  // 🔥 FORCE UPDATE PASSWORD EVERY DEPLOY
-  await run(
-    'UPDATE users SET password_hash=?, role=? WHERE phone=?',
-    [await bcrypt.hash(adminPassword, 10), 'admin', adminPhone]
-  );
-  console.log('Admin UPDATED:', adminPhone);
+  if (!existingAdmin) {
+    await run(
+      'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
+      ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
+    );
+    console.log('Admin CREATED:', adminPhone);
+  } else {
+    await run(
+      'UPDATE users SET password_hash=?, role=? WHERE phone=?',
+      [await bcrypt.hash(adminPassword, 10), 'admin', adminPhone]
+    );
+    console.log('Admin UPDATED:', adminPhone);
+  }
+
 }
 
 app.post('/api/auth/register', async (req, res) => {
