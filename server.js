@@ -126,6 +126,10 @@ function makeToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '365d' });
 }
 
+function normalizePhone(phone) {
+  return String(phone || '').replace(/[\s\-()]/g, '').trim();
+}
+
 async function auth(req, res, next) {
   try {
     const header = req.headers.authorization || '';
@@ -270,8 +274,13 @@ async function init() {
     )
   `);
 
-  const adminPhone = (process.env.ADMIN_PHONE || '+998949903424').trim();
-  const adminPassword = (process.env.ADMIN_PASSWORD || 'Soha1212').trim();
+  const adminPhone = normalizePhone(process.env.ADMIN_PHONE || '+998949903424');
+  const adminPassword = String(process.env.ADMIN_PASSWORD || 'Soha1212').trim();
+
+  await run(
+    `DELETE FROM users WHERE role='admin' AND phone<>?`,
+    [adminPhone]
+  );
 
   const existingAdmin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
 
@@ -283,8 +292,8 @@ async function init() {
     console.log('Admin CREATED:', adminPhone);
   } else {
     await run(
-      'UPDATE users SET password_hash=?, role=? WHERE phone=?',
-      [await bcrypt.hash(adminPassword, 10), 'admin', adminPhone]
+      'UPDATE users SET password_hash=?, role=?, name=? WHERE phone=?',
+      [await bcrypt.hash(adminPassword, 10), 'admin', 'Admin', adminPhone]
     );
     console.log('Admin UPDATED:', adminPhone);
   }
@@ -294,8 +303,9 @@ async function init() {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, phone, password } = req.body;
+    const normalizedPhone = normalizePhone(phone);
 
-    if (!name || !phone || !password) {
+    if (!name || !normalizedPhone || !password) {
       return res.status(400).json({ message: 'Name, phone and password are required.' });
     }
 
@@ -303,11 +313,11 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
-    if (!/^\+998\d{9}$/.test(phone)) {
+    if (!/^\+998\d{9}$/.test(normalizedPhone)) {
       return res.status(400).json({ message: 'Invalid Uzbekistan phone number.' });
     }
 
-    const exists = await get('SELECT id FROM users WHERE phone=?', [phone]);
+    const exists = await get('SELECT id FROM users WHERE phone=?', [normalizedPhone]);
 
     if (exists) {
       return res.status(409).json({ message: 'This phone number is already registered.' });
@@ -315,7 +325,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     await run(
       'INSERT INTO users(name,phone,password_hash) VALUES(?,?,?)',
-      [name.trim(), phone, await bcrypt.hash(password, 10)]
+      [name.trim(), normalizedPhone, await bcrypt.hash(password, 10)]
     );
 
     res.status(201).json({ message: 'Registered successfully.' });
@@ -325,10 +335,25 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+app.get('/api/debug/admin-exists', async (req, res) => {
+  try {
+    const adminPhone = normalizePhone(process.env.ADMIN_PHONE || '+998949903424');
+    const admin = await get('SELECT id, phone, role FROM users WHERE phone=?', [adminPhone]);
+    res.json({
+      env_admin_phone: adminPhone,
+      admin_exists: !!admin,
+      role: admin ? admin.role : null
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { phone, password } = req.body;
-    const user = await get('SELECT * FROM users WHERE phone=?', [phone]);
+    const normalizedPhone = normalizePhone(phone);
+    const user = await get('SELECT * FROM users WHERE phone=?', [normalizedPhone]);
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ message: 'Wrong phone or password.' });
@@ -1083,7 +1108,7 @@ app.put('/api/admin/user/:id/password', auth, adminOnly, async (req, res) => {
 app.put('/api/admin/user/:id/info', auth, adminOnly, async (req, res) => {
   try {
     const name = (req.body.name || '').trim();
-    const phone = (req.body.phone || '').trim();
+    const phone = normalizePhone(req.body.phone || '');
     const gmail = (req.body.gmail || '').trim();
     const telegram = (req.body.telegram || '').trim();
 
