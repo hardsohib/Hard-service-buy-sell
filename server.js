@@ -5,13 +5,18 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const multer = require('multer');
 const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
+
+if (!process.env.DATABASE_URL) {
+  console.error('Missing DATABASE_URL environment variable.');
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json());
@@ -64,22 +69,46 @@ function uploadedUrls(files, field) {
   return JSON.stringify((files[field] || []).map(file => `/uploads/writing-tests/${file.filename}`));
 }
 
-const db = new sqlite3.Database(path.join(__dirname, 'database.sqlite'));
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false }
+});
 
-const run = (sql, params = []) =>
-  new Promise((resolve, reject) => db.run(sql, params, function (err) {
-    err ? reject(err) : resolve(this);
-  }));
+function toPostgres(sql) {
+  let index = 0;
+  let converted = sql.replace(/\?/g, () => `$${++index}`);
 
-const get = (sql, params = []) =>
-  new Promise((resolve, reject) => db.get(sql, params, (err, row) => {
-    err ? reject(err) : resolve(row);
-  }));
+  converted = converted
+    .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY')
+    .replace(/created_at TEXT DEFAULT CURRENT_TIMESTAMP/g, 'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    .replace(/used_at TEXT DEFAULT NULL/g, 'used_at TIMESTAMP DEFAULT NULL');
 
-const all = (sql, params = []) =>
-  new Promise((resolve, reject) => db.all(sql, params, (err, rows) => {
-    err ? reject(err) : resolve(rows);
-  }));
+  return converted;
+}
+
+async function run(sql, params = []) {
+  let query = toPostgres(sql).trim();
+
+  if (/^INSERT\s+/i.test(query) && !/\bRETURNING\b/i.test(query)) {
+    query += ' RETURNING id';
+  }
+
+  const result = await pool.query(query, params);
+  return {
+    lastID: result.rows && result.rows[0] ? result.rows[0].id : undefined,
+    rowCount: result.rowCount
+  };
+}
+
+async function get(sql, params = []) {
+  const result = await pool.query(toPostgres(sql), params);
+  return result.rows[0];
+}
+
+async function all(sql, params = []) {
+  const result = await pool.query(toPostgres(sql), params);
+  return result.rows;
+}
 
 function safeUser(user) {
   return {
@@ -122,9 +151,16 @@ function adminOnly(req, res, next) {
 }
 
 async function addColumnIfMissing(table, column, definition) {
-  const columns = await all(`PRAGMA table_info(${table})`);
-  const exists = columns.some(c => c.name === column);
-  if (!exists) await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  const exists = await get(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_name = $1 AND column_name = $2`,
+    [table, column]
+  );
+
+  if (!exists) {
+    await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 async function init() {
@@ -546,13 +582,13 @@ app.put('/api/admin/speaking-test/:id', auth, adminOnly, async (req, res) => {
     }
 
     await run(
-      'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      'UPDATE speaking_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP::text WHERE id=?',
       [status, resultMessage, req.params.id]
     );
 
     await run(
       `UPDATE purchases
-       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
+       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP::text
        WHERE id = (
          SELECT id FROM purchases
          WHERE user_id=? AND service_id=1
@@ -702,13 +738,13 @@ app.put('/api/admin/writing-test/:id', auth, adminOnly, async (req, res) => {
     }
 
     await run(
-      'UPDATE writing_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      'UPDATE writing_tests SET status=?, result_message=?, updated_at=CURRENT_TIMESTAMP::text WHERE id=?',
       [status, resultMessage, req.params.id]
     );
 
     await run(
       `UPDATE purchases
-       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP
+       SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP::text
        WHERE id = (
          SELECT id FROM purchases
          WHERE user_id=? AND service_id=2
@@ -956,7 +992,7 @@ app.put('/api/admin/order/:id', auth, adminOnly, async (req, res) => {
     }
 
     await run(
-      'UPDATE purchases SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      'UPDATE purchases SET status=?, admin_message=?, is_read=0, updated_at=CURRENT_TIMESTAMP::text WHERE id=?',
       [status, adminMessage, req.params.id]
     );
 
