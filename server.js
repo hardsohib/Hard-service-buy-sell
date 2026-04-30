@@ -272,18 +272,17 @@ async function init() {
 
   const adminPhone = process.env.ADMIN_PHONE || '+998949903424';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Soha1212';
-await run(
-  `DELETE FROM users WHERE role='admin'`
-);
 
-await run(
-  `INSERT INTO users(name, phone, password_hash, role, balance)
-   VALUES(?,?,?,?,?)`,
-  ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
-);
+  const admin = await get('SELECT id FROM users WHERE phone=?', [adminPhone]);
 
-console.log('Admin reset:', adminPhone);
- 
+  if (!admin) {
+    await run(
+      'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
+      ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
+    );
+    console.log(`Admin created: ${adminPhone} / ${adminPassword}`);
+  }
+}
 
 app.post('/api/auth/register', async (req, res) => {
   try {
