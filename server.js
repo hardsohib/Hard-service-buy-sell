@@ -127,7 +127,15 @@ function makeToken(user) {
 }
 
 function normalizePhone(phone) {
-  return String(phone || '').replace(/[\s\-()]/g, '').trim();
+  let digits = String(phone || '').replace(/\D/g, '');
+
+  if (digits.startsWith('998')) {
+    digits = digits.slice(0, 12);
+  } else if (digits.length === 9) {
+    digits = '998' + digits;
+  }
+
+  return '+' + digits;
 }
 
 async function auth(req, res, next) {
@@ -277,11 +285,6 @@ async function init() {
   const adminPhone = normalizePhone(process.env.ADMIN_PHONE || '+998949903424');
   const adminPassword = String(process.env.ADMIN_PASSWORD || 'Soha1212').trim();
 
-  await run(
-    `DELETE FROM users WHERE role='admin' AND phone<>?`,
-    [adminPhone]
-  );
-
   const existingAdmin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
 
   if (!existingAdmin) {
@@ -339,9 +342,11 @@ app.get('/api/debug/admin-exists', async (req, res) => {
   try {
     const adminPhone = normalizePhone(process.env.ADMIN_PHONE || '+998949903424');
     const admin = await get('SELECT id, phone, role FROM users WHERE phone=?', [adminPhone]);
+
     res.json({
       env_admin_phone: adminPhone,
       admin_exists: !!admin,
+      db_phone: admin ? admin.phone : null,
       role: admin ? admin.role : null
     });
   } catch (err) {
@@ -351,9 +356,34 @@ app.get('/api/debug/admin-exists', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { phone, password } = req.body;
-    const normalizedPhone = normalizePhone(phone);
-    const user = await get('SELECT * FROM users WHERE phone=?', [normalizedPhone]);
+    const phone = normalizePhone(req.body.phone);
+    const password = String(req.body.password || '').trim();
+
+    const adminPhone = normalizePhone(process.env.ADMIN_PHONE || '+998949903424');
+    const adminPassword = String(process.env.ADMIN_PASSWORD || 'Soha1212').trim();
+
+    // Emergency-safe admin login from Render ENV
+    if (phone === adminPhone && password === adminPassword) {
+      let admin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
+
+      if (!admin) {
+        await run(
+          'INSERT INTO users(name,phone,password_hash,role,balance) VALUES(?,?,?,?,?)',
+          ['Admin', adminPhone, await bcrypt.hash(adminPassword, 10), 'admin', 1000000]
+        );
+        admin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
+      } else {
+        await run(
+          'UPDATE users SET password_hash=?, role=?, name=? WHERE phone=?',
+          [await bcrypt.hash(adminPassword, 10), 'admin', 'Admin', adminPhone]
+        );
+        admin = await get('SELECT * FROM users WHERE phone=?', [adminPhone]);
+      }
+
+      return res.json({ token: makeToken(admin), user: safeUser(admin) });
+    }
+
+    const user = await get('SELECT * FROM users WHERE phone=?', [phone]);
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ message: 'Wrong phone or password.' });
@@ -1108,7 +1138,7 @@ app.put('/api/admin/user/:id/password', auth, adminOnly, async (req, res) => {
 app.put('/api/admin/user/:id/info', auth, adminOnly, async (req, res) => {
   try {
     const name = (req.body.name || '').trim();
-    const phone = normalizePhone(req.body.phone || '');
+    const phone = (req.body.phone || '').trim();
     const gmail = (req.body.gmail || '').trim();
     const telegram = (req.body.telegram || '').trim();
 
